@@ -4,10 +4,6 @@
 // sketch loads:
 //   <script src="https://cdn.jsdelivr.net/npm/mp4-muxer"></script>
 //
-// Layout is responsive: on phones / touch screens the canvas stacks on top
-// with the controls below it (page scrolls); on desktop the controls float
-// over the centred canvas as before.
-//
 // Video is exported at the exact sizes below (independent of preview scale):
 //   story  -> 1080×1920   post -> 1080×1350,  both at 40 Mbps H.264.
 
@@ -121,11 +117,8 @@ let bgColor = "#FFFFFF";
 let bgImage = null;
 let bgVideo = null;
 
-// canvas + preview scaling + layout containers
+// canvas + preview scaling
 let cnv;
-let appRoot;
-let canvasHolder;
-let layoutMobile = false;
 let displayScale = 1;
 let previewW = 1;
 let previewH = 1;
@@ -165,53 +158,22 @@ function preload() {
 }
 
 function setup() {
-  injectStyles();
-
-  appRoot = createDiv();
-  appRoot.id("rvk-root");
-
-  canvasHolder = createDiv();
-  canvasHolder.id("rvk-canvas-holder");
-  canvasHolder.parent(appRoot);
+  document.documentElement.style.margin = "0";
+  document.body.style.margin = "0";
+  document.body.style.overflow = "hidden";
+  document.body.style.background = "#fff";
 
   pixelDensity(2);
-  recalcDisplayScale();
 
+  recalcDisplayScale();
   cnv = createCanvas(previewW, previewH);
-  cnv.parent(canvasHolder);
   cnv.style("display", "block");
-  cnv.style("position", "static");
   cnv.style("background", "#fff");
-  cnv.style("touch-action", "none"); // canvas handles touch; page scrolls elsewhere
-  cnv.style("user-select", "none");
-  cnv.style("-webkit-user-select", "none");
 
   applyCtxDefaults();
   pickPhraseColor();
   buildUI();
-  applyLayoutMode();
-}
-
-function injectStyles() {
-  const css = `
-    html, body { margin: 0; background: #dcdcdc; }
-    @media (pointer: coarse), (max-width: 820px) {
-      #rvk-panel { font-size: 14px !important; }
-      #rvk-panel button,
-      #rvk-panel input,
-      #rvk-panel select {
-        font-size: 16px !important;   /* >=16px stops iOS zooming on focus */
-        padding: 11px 12px !important;
-      }
-    }
-  `;
-  const style = document.createElement("style");
-  style.textContent = css;
-  document.head.appendChild(style);
-}
-
-function isMobile() {
-  return window.matchMedia("(pointer: coarse), (max-width: 820px)").matches;
+  positionCanvas();
 }
 
 function applyCtxDefaults() {
@@ -224,15 +186,9 @@ function recalcDisplayScale() {
   canvasW = SIZES[currentSize].w;
   canvasH = SIZES[currentSize].h;
 
-  const mobile = isMobile();
-  const margin = mobile ? 12 : 20;
+  const margin = 20;
   const availW = Math.max(1, window.innerWidth - margin * 2);
-
-  // Mobile: the page scrolls, so cap the canvas height so the controls below
-  // stay reachable. Desktop: fit the full window (the panel floats on top).
-  const availH = mobile
-    ? Math.max(1, Math.round(window.innerHeight * 0.62))
-    : Math.max(1, window.innerHeight - margin * 2);
+  const availH = Math.max(1, window.innerHeight - margin * 2);
 
   displayScale = Math.min(availW / canvasW, availH / canvasH, 1);
 
@@ -240,84 +196,31 @@ function recalcDisplayScale() {
   previewH = Math.max(1, Math.round(canvasH * displayScale));
 }
 
-function applyLayoutMode() {
-  if (!panel || !canvasHolder || !appRoot) return;
-
-  layoutMobile = isMobile();
-
-  if (layoutMobile) {
-    document.body.style.overflowX = "hidden";
-    document.body.style.overflowY = "auto";
-
-    appRoot.style("display", "flex");
-    appRoot.style("flex-direction", "column");
-    appRoot.style("align-items", "center");
-    appRoot.style("gap", "14px");
-    appRoot.style("padding", "12px");
-    appRoot.style("box-sizing", "border-box");
-    appRoot.style("width", "100%");
-    appRoot.style("min-height", "100vh");
-    appRoot.style("position", "static");
-
-    canvasHolder.style("position", "static");
-    canvasHolder.style("width", "100%");
-    canvasHolder.style("display", "flex");
-    canvasHolder.style("justify-content", "center");
-    canvasHolder.style("align-items", "flex-start");
-
-    panel.style("position", "static");
-    panel.style("top", "auto");
-    panel.style("left", "auto");
-    panel.style("width", previewW + "px");
-    panel.style("max-width", "100%");
-    panel.style("z-index", "auto");
-  } else {
-    document.body.style.overflow = "hidden";
-
-    appRoot.style("display", "block");
-    appRoot.style("position", "static");
-    appRoot.style("padding", "0");
-    appRoot.style("min-height", "auto");
-
-    // canvas centred in the viewport
-    canvasHolder.style("position", "fixed");
-    canvasHolder.style("top", "0");
-    canvasHolder.style("left", "0");
-    canvasHolder.style("right", "0");
-    canvasHolder.style("bottom", "0");
-    canvasHolder.style("width", "auto");
-    canvasHolder.style("display", "flex");
-    canvasHolder.style("align-items", "center");
-    canvasHolder.style("justify-content", "center");
-
-    // floating control panel
-    panel.style("position", "fixed");
-    panel.style("top", "16px");
-    panel.style("left", "16px");
-    panel.style("width", "210px");
-    panel.style("max-width", "none");
-    panel.style("z-index", "10");
-  }
-}
-
-function relayout() {
-  if (!cnv) return;
-
+function resizePreviewCanvas() {
   recalcDisplayScale();
   resizeCanvas(previewW, previewH);
   applyCtxDefaults();
-  applyLayoutMode();
+  positionCanvas();
+}
 
-  // re-centre the current auto-layout for the new size / orientation
-  if (autoLayout) applyLayout();
+function positionCanvas() {
+  if (!cnv) return;
+
+  const x = Math.round((window.innerWidth - previewW) / 2);
+  const y = Math.round((window.innerHeight - previewH) / 2);
+
+  cnv.position(x, y);
 }
 
 function buildUI() {
   panel = createDiv();
-  panel.id("rvk-panel");
-  panel.parent(appRoot);
-  panel.style("box-sizing", "border-box");
+  panel.style("position", "fixed");
+  panel.style("top", "16px");
+  panel.style("left", "16px");
+  panel.style("z-index", "10");
+  panel.style("width", "210px");
   panel.style("padding", "12px 14px");
+  panel.style("box-sizing", "border-box");
   panel.style("background", "rgba(255,255,255,0.92)");
   panel.style("backdrop-filter", "blur(4px)");
   panel.style("border", "1px solid rgba(0,0,0,0.08)");
@@ -614,39 +517,10 @@ function switchSize(key) {
   if (!SIZES[key]) return;
 
   currentSize = key;
-  relayout();
-}
+  resizePreviewCanvas();
 
-// ---- saving ----
-// Mobile: prefer the native share sheet so the file can go to Photos / Files.
-// Desktop: always use the original direct download (more reliable there).
-async function saveBlob(blob, filename) {
-  if (isMobile() && navigator.canShare) {
-    try {
-      const file = new File([blob], filename, { type: blob.type });
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file] });
-        return;
-      }
-    } catch (e) {
-      if (e && e.name === "AbortError") return; // user dismissed the sheet
-      // any other error (e.g. lost user-gesture): fall through to download
-    }
-  }
-
-  downloadBlob(blob, filename);
-}
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // re-centre the current layout for the new format (keep the same shape)
+  if (autoLayout) applyLayout();
 }
 
 function exportImage() {
@@ -666,7 +540,17 @@ function exportImage() {
       g.remove();
       return;
     }
-    saveBlob(blob, filename);
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     g.remove();
   }, "image/png");
 }
@@ -797,8 +681,17 @@ async function stopRecording() {
 
   const { buffer } = mp4Muxer.target;
   const blob = new Blob([buffer], { type: "video/mp4" });
+  const url = URL.createObjectURL(blob);
 
-  saveBlob(blob, "rundviskom_" + currentSize + ".mp4");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "rundviskom_" + currentSize + ".mp4";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 
   mp4Encoder = null;
   mp4Muxer = null;
@@ -1088,33 +981,30 @@ function pointerToRealCanvas() {
   };
 }
 
-// ---- shared pointer input (mouse + touch) ----
-// Each returns true when the gesture was handled on the canvas (drawing), so
-// the touch wrappers know whether to suppress the browser's default behaviour.
-function pointerDown() {
-  if (overUI() || !inCanvas()) return false;
+function mousePressed() {
+  if (overUI() || !inCanvas()) return;
 
   const p = pointerToRealCanvas();
 
   if (eraser) {
     eraseAt(p.x, p.y);
-  } else {
-    addCircle(p.x, p.y);
+    return;
   }
+
+  addCircle(p.x, p.y);
 
   lastX = p.x;
   lastY = p.y;
-  return true;
 }
 
-function pointerMove() {
-  if (overUI() || !inCanvas()) return false;
+function mouseDragged() {
+  if (overUI() || !inCanvas()) return;
 
   const p = pointerToRealCanvas();
 
   if (eraser) {
     eraseAt(p.x, p.y);
-    return true;
+    return;
   }
 
   if (lastX === null) {
@@ -1129,41 +1019,11 @@ function pointerMove() {
     lastX = p.x;
     lastY = p.y;
   }
-
-  return true;
-}
-
-function pointerUp() {
-  lastX = null;
-  lastY = null;
-}
-
-function mousePressed() {
-  pointerDown();
-}
-
-function mouseDragged() {
-  pointerMove();
 }
 
 function mouseReleased() {
-  pointerUp();
-}
-
-// Returning false on a canvas touch suppresses the synthesized mouse events
-// (no double-drawing) and the default gesture. Over the controls / outside the
-// canvas we return true, so buttons and page scrolling keep working.
-function touchStarted() {
-  return pointerDown() ? false : true;
-}
-
-function touchMoved() {
-  return pointerMove() ? false : true;
-}
-
-function touchEnded() {
-  pointerUp();
-  return true;
+  lastX = null;
+  lastY = null;
 }
 
 function clearCanvas() {
@@ -1192,5 +1052,5 @@ function keyPressed() {
 }
 
 function windowResized() {
-  relayout();
+  resizePreviewCanvas();
 }
