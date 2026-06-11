@@ -116,10 +116,15 @@ let loadedImages = [];
 let imgIndex = 0;
 
 // background
-let bgMode = "image"; // "color" | "image" | "video"
+let bgMode = "color"; // "color" | "image" | "video"
 let bgColor = "#FFFFFF";
 let bgImage = null;
 let bgVideo = null;
+
+// fixed overlay texture (background-image.png), always multiplied on top of the
+// background layer when enabled
+let overlayImage = null;
+let overlayEnabled = true;
 
 // canvas + preview scaling + layout containers
 let cnv;
@@ -135,7 +140,7 @@ let panel;
 let textInput;
 let modeButton, eraserButton;
 let autoButton, regenButton;
-let imgFileInput, bgButton, bgFileInput, bgColorSelect;
+let imgFileInput, bgButton, bgFileInput, bgColorSelect, overlayButton;
 let sizeSelect, exportButton;
 let recordButton, saveVideoButton, clearButton;
 
@@ -157,13 +162,13 @@ let lastVideoName = "";
 function preload() {
   linzFont = loadFont("LinzSans-Medium.ttf");
 
-  // default background image; falls back to the colour background if missing
-  bgImage = loadImage(
+  // fixed overlay texture, multiplied over the background layer; if it fails to
+  // load the overlay simply isn't drawn
+  overlayImage = loadImage(
     "/background-image.png",
     () => {},
     () => {
-      bgImage = null;
-      bgMode = "color";
+      overlayImage = null;
     }
   );
 }
@@ -403,6 +408,12 @@ function buildUI() {
   bgFileInput.elt.setAttribute("accept", "image/*,video/*");
   bgFileInput.elt.addEventListener("change", handleBgFile);
 
+  uiLabel("Overlay texture");
+  overlayButton = createButton(overlayEnabled ? "Overlay: ON" : "Overlay: OFF");
+  overlayButton.parent(panel);
+  styleButton(overlayButton);
+  overlayButton.mousePressed(toggleOverlay);
+
   uiLabel("Canvas size");
   sizeSelect = createSelect();
   sizeSelect.parent(panel);
@@ -440,7 +451,8 @@ function buildUI() {
   saveVideoButton.style("background", "#0DB254");
   saveVideoButton.style("color", "#fff");
   saveVideoButton.style("border-color", "#0DB254");
-  saveVideoButton.mousePressed(saveLastVideo);
+  // native click carries the user activation navigator.share needs
+  saveVideoButton.elt.addEventListener("click", saveLastVideo);
   saveVideoButton.hide();
 
   uiLabel("");
@@ -626,6 +638,11 @@ function toggleBg() {
   updateVisibility();
 }
 
+function toggleOverlay() {
+  overlayEnabled = !overlayEnabled;
+  overlayButton.html(overlayEnabled ? "Overlay: ON" : "Overlay: OFF");
+}
+
 function switchSize(key) {
   if (!SIZES[key]) return;
 
@@ -669,7 +686,47 @@ function downloadBlob(blob, filename) {
 // share sheet can open (saveBlob calls navigator.share before any await).
 function saveLastVideo() {
   if (!lastVideoBlob) return;
-  saveBlob(lastVideoBlob, lastVideoName);
+
+  // Best path on mobile: the native share sheet (Save to Photos / Files).
+  // share() is called synchronously here so the button's user gesture is still
+  // active. canShare/File can be unsupported, so guard the whole thing.
+  try {
+    const file = new File([lastVideoBlob], lastVideoName, { type: "video/mp4" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file] }).catch((err) => {
+        if (err && err.name === "AbortError") return; // user dismissed the sheet
+        openVideoFallback(); // best effort (may be popup-blocked after the await)
+      });
+      return;
+    }
+  } catch (e) {
+    // canShare threw or File isn't constructable — fall through
+  }
+
+  // No file sharing available: open the clip so it can be saved manually
+  // (mobile shows the native video view; long-press / share button saves it).
+  openVideoFallback();
+}
+
+function openVideoFallback() {
+  if (!lastVideoBlob) return;
+
+  const url = URL.createObjectURL(lastVideoBlob);
+  const win = window.open(url, "_blank");
+
+  if (!win) {
+    // popup blocked: fall back to a direct download
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = lastVideoName;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // keep the URL alive long enough for the new tab to load the video
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 function exportImage() {
@@ -827,16 +884,16 @@ async function stopRecording() {
 
   const name = "rundviskom_" + currentSize + ".mp4";
 
-  if (isMobile()) {
-    // navigator.share needs a live user gesture, but the awaited flush() above
-    // consumed it — so stash the file and let a button tap trigger the share.
-    lastVideoBlob = blob;
-    lastVideoName = name;
-    saveVideoButton.show();
-  } else {
-    // desktop download works without a gesture
-    downloadBlob(blob, name);
-  }
+  // Stash the clip and reveal the Save button. Sharing needs a fresh user
+  // gesture (the awaited flush() above consumed this one), so the button — not
+  // an automatic call — is what opens the share sheet on mobile.
+  lastVideoBlob = blob;
+  lastVideoName = name;
+  saveVideoButton.show();
+
+  // Desktop can download immediately without a gesture; the button stays as a
+  // manual fallback on every platform.
+  if (!isMobile()) downloadBlob(blob, name);
 
   mp4Encoder = null;
   mp4Muxer = null;
@@ -913,6 +970,25 @@ function renderScene(ctx, CW, CH) {
     blendMode_(MULTIPLY);
 
     image_(mediaSrc, CW / 2, CH / 2, mediaW * scaleBg, mediaH * scaleBg);
+
+    pop_();
+  }
+
+  // fixed overlay texture, always multiplied on top of the background layer
+  // (color / image / video), independent of the background choice
+  if (overlayEnabled && overlayImage && overlayImage.width) {
+    const scaleOv = Math.max(CW / overlayImage.width, CH / overlayImage.height);
+
+    push_();
+    blendMode_(MULTIPLY);
+
+    image_(
+      overlayImage,
+      CW / 2,
+      CH / 2,
+      overlayImage.width * scaleOv,
+      overlayImage.height * scaleOv
+    );
 
     pop_();
   }
