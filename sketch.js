@@ -153,9 +153,8 @@ const REC_BITRATE = 40_000_000; // 40 Mbps
 function preload() {
   linzFont = loadFont("LinzSans-Medium.ttf");
 
-  // default background image; falls back to the colour background if missing
   bgImage = loadImage(
-    "/background-image.png",
+    "background-image.png",
     () => {},
     () => {
       bgImage = null;
