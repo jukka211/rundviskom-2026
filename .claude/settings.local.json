@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"require\\('fs'\\).readFileSync\\('sketch.js','utf8'\\)\")",
+      "Bash(node --check sketch.js)",
+      "Bash(node -c sketch.js)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(chromium-cli --help)",
+      "Bash(node -e \"require\\('playwright'\\)\")",
+      "Bash(npx --yes playwright --version)"
+    ]
+  }
+}

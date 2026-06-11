@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phyllotaxis — filled shapes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<style>
+  :root{
+    --bg:#0d0c0a; --panel:#15130f; --line:#2a261e;
+    --ink:#e8ddc7; --dim:#8a8270; --hot:#e8a13c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:"IBM Plex Mono",monospace;}
+  #wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:18px;padding:24px 16px;}
+  header{text-align:center;line-height:1.3;}
+  header h1{font-family:"Fraunces",serif;font-weight:500;font-size:21px;margin:0;letter-spacing:.5px;}
+  header p{margin:5px 0 0;font-size:10.5px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;}
+  #sketch canvas{display:block;border:1px solid var(--line);}
+  #panel{width:min(640px,92vw);background:var(--panel);border:1px solid var(--line);
+    padding:16px 18px;display:grid;gap:14px;}
+  .row{display:grid;grid-template-columns:92px 1fr 72px;align-items:center;gap:14px;}
+  .row label{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);}
+  .row output{font-size:12px;text-align:right;color:var(--ink);}
+  .row output.golden{color:var(--hot);}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:2px;background:var(--line);outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--hot);cursor:pointer;}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border:none;border-radius:50%;background:var(--hot);cursor:pointer;}
+  #buttons{display:flex;gap:8px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line);}
+  button{font-family:inherit;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;
+    background:transparent;color:var(--ink);border:1px solid var(--line);padding:7px 12px;cursor:pointer;transition:all .15s;}
+  button:hover{border-color:var(--hot);color:var(--hot);}
+  .hint{font-size:11px;color:var(--dim);text-align:center;line-height:1.6;max-width:560px;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <h1>Phyllotaxis</h1>
+    <p>deterministic order · filled shapes</p>
+  </header>
+  <div id="sketch"></div>
+  <div id="panel">
+    <div class="row">
+      <label for="count">seeds</label>
+      <input id="count" type="range" min="50" max="2600" value="1200" step="10">
+      <output id="countv">1200</output>
+    </div>
+    <div class="row">
+      <label for="angle">divergence</label>
+      <input id="angle" type="range" min="100" max="180" value="137.5" step="0.1">
+      <output id="anglev">137.5°</output>
+    </div>
+    <div class="row">
+      <label for="size">seed size</label>
+      <input id="size" type="range" min="2" max="16" value="7" step="0.5">
+      <output id="sizev">7</output>
+    </div>
+    <div id="buttons">
+      <button id="shape">shape: circle</button>
+      <button id="spin">spin: on</button>
+      <button id="reset">reset → 137.5°</button>
+      <button id="save">save png</button>
+    </div>
+  </div>
+  <p class="hint">Nudge the divergence a tenth of a degree off 137.5° and watch the spiral families reorganise — same rules, fully predictable, no randomness anywhere.</p>
+</div>
+
+<script>
+let shapeMode = 0;
+const shapeNames = ['circle','petal','square'];
+let spin = true;
+let phase = 0;
+let cnv;
+
+function setup(){
+  const s = fitSize();
+  cnv = createCanvas(s, s);
+  cnv.parent('sketch');
+  angleMode(DEGREES);
+  colorMode(HSB, 360, 100, 100, 1);
+
+  // live readouts
+  bindOut('count','countv', v => v);
+  bindOut('angle','anglev', v => {
+    document.getElementById('anglev')
+      .classList.toggle('golden', Math.abs(parseFloat(v) - 137.5) < 0.05);
+    return parseFloat(v).toFixed(1) + '°';
+  });
+  bindOut('size','sizev', v => v);
+
+  on('shape', e => { shapeMode = (shapeMode + 1) % 3;
+    e.target.textContent = 'shape: ' + shapeNames[shapeMode]; });
+  on('spin',  e => { spin = !spin;
+    e.target.textContent = 'spin: ' + (spin ? 'on' : 'off'); });
+  on('reset', () => { const a = document.getElementById('angle');
+    a.value = 137.5; a.dispatchEvent(new Event('input')); });
+  on('save',  () => saveCanvas(cnv, 'phyllotaxis', 'png'));
+}
+
+function draw(){
+  background(35, 22, 6);                 // deep warm black
+  translate(width / 2, height / 2);
+  if (spin) phase += 0.06;
+  rotate(phase);
+
+  const count   = val('count');
+  const diverge = val('angle');
+  const seedMax = val('size');
+
+  // radial scale chosen so the outermost seed always fits the canvas
+  const c = (width / 2 - seedMax - 6) / Math.sqrt(count);
+
+  noStroke();                            // <-- filled shapes, never outlines
+  for (let i = 0; i < count; i++){
+    const a = i * diverge;               // the only "rule": rotate by a fixed angle
+    const r = c * Math.sqrt(i);          // sqrt keeps seed density even
+    const x = r * cos(a);
+    const y = r * sin(a);
+
+    const t = i / count;                 // 0 = centre, 1 = rim
+    fill(lerp(46, 8, t), lerp(55, 95, t), lerp(100, 72, t)); // gold -> ember
+    drawSeed(x, y, map(i, 0, count, seedMax * 0.35, seedMax), a);
+  }
+}
+
+// every branch fills a shape; nothing is stroked
+function drawSeed(x, y, d, a){
+  if (shapeMode === 0){
+    circle(x, y, d);
+  } else if (shapeMode === 1){           // petal: ellipse elongated radially
+    push(); translate(x, y); rotate(a);  // local +x points outward
+    ellipse(0, 0, d * 1.5, d * 0.7);
+    pop();
+  } else {                               // square, oriented to its radial angle
+    push(); translate(x, y); rotate(a);
+    rectMode(CENTER); rect(0, 0, d * 0.9, d * 0.9);
+    pop();
+  }
+}
+
+/* helpers */
+function val(id){ return parseFloat(document.getElementById(id).value); }
+function on(id, fn){ document.getElementById(id).addEventListener('click', fn); }
+function bindOut(inId, outId, fmt){
+  const inp = document.getElementById(inId), out = document.getElementById(outId);
+  const upd = () => out.textContent = fmt(inp.value);
+  inp.addEventListener('input', upd); upd();
+}
+function fitSize(){ return Math.min(window.innerWidth - 40, window.innerHeight - 80, 640); }
+function windowResized(){ resizeCanvas(fitSize(), fitSize()); }
+</script>
+</body>
+</html>
