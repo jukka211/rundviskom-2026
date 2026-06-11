@@ -137,7 +137,7 @@ let modeButton, eraserButton;
 let autoButton, regenButton;
 let imgFileInput, bgButton, bgFileInput, bgColorSelect;
 let sizeSelect, exportButton;
-let recordButton, clearButton;
+let recordButton, saveVideoButton, clearButton;
 
 // ---- video recording (WebCodecs -> MP4) ----
 let isRecording = false;
@@ -150,11 +150,16 @@ let recLastCapture = 0;
 const REC_FPS = 30;
 const REC_BITRATE = 40_000_000; // 40 Mbps
 
+// last finished recording, held so a fresh user tap can save it on mobile
+let lastVideoBlob = null;
+let lastVideoName = "";
+
 function preload() {
   linzFont = loadFont("LinzSans-Medium.ttf");
 
+  // default background image; falls back to the colour background if missing
   bgImage = loadImage(
-    "background-image.png",
+    "/background-image.png",
     () => {},
     () => {
       bgImage = null;
@@ -426,6 +431,18 @@ function buildUI() {
   styleButton(recordButton);
   recordButton.mousePressed(toggleRecording);
 
+  // Shown after a mobile recording finishes; tapping it (a fresh user gesture)
+  // opens the share/save sheet, which an awaited flush() can't do on its own.
+  saveVideoButton = createButton("⬇  Save video");
+  saveVideoButton.parent(panel);
+  styleButton(saveVideoButton);
+  saveVideoButton.style("margin-top", "6px");
+  saveVideoButton.style("background", "#0DB254");
+  saveVideoButton.style("color", "#fff");
+  saveVideoButton.style("border-color", "#0DB254");
+  saveVideoButton.mousePressed(saveLastVideo);
+  saveVideoButton.hide();
+
   uiLabel("");
   clearButton = createButton("✕  Clear canvas");
   clearButton.parent(panel);
@@ -648,6 +665,13 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// Triggered by a direct button tap, so the gesture is fresh and the mobile
+// share sheet can open (saveBlob calls navigator.share before any await).
+function saveLastVideo() {
+  if (!lastVideoBlob) return;
+  saveBlob(lastVideoBlob, lastVideoName);
+}
+
 function exportImage() {
   const exportW = canvasW * EXPORT_PIXEL_DENSITY;
   const exportH = canvasH * EXPORT_PIXEL_DENSITY;
@@ -747,6 +771,10 @@ async function startRecording() {
   });
   mp4Encoder.configure({ ...baseCfg, codec });
 
+  // starting fresh: drop any previously stashed clip + its Save button
+  if (saveVideoButton) saveVideoButton.hide();
+  lastVideoBlob = null;
+
   recStartTime = performance.now();
   recLastCapture = 0;
   recFrameCount = 0;
@@ -797,7 +825,18 @@ async function stopRecording() {
   const { buffer } = mp4Muxer.target;
   const blob = new Blob([buffer], { type: "video/mp4" });
 
-  saveBlob(blob, "rundviskom_" + currentSize + ".mp4");
+  const name = "rundviskom_" + currentSize + ".mp4";
+
+  if (isMobile()) {
+    // navigator.share needs a live user gesture, but the awaited flush() above
+    // consumed it — so stash the file and let a button tap trigger the share.
+    lastVideoBlob = blob;
+    lastVideoName = name;
+    saveVideoButton.show();
+  } else {
+    // desktop download works without a gesture
+    downloadBlob(blob, name);
+  }
 
   mp4Encoder = null;
   mp4Muxer = null;
