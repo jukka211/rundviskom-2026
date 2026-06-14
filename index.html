@@ -1,19 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.13/lib/p5.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.13/lib/addons/p5.sound.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mp4-muxer"></script>
-    
-    
-    
-    <link rel="stylesheet" type="text/css" href="style.css">
-    <meta charset="utf-8" />
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>rundviskom</title>
 
-  </head>
-  <body>
-    <main>
-    </main>
-    <script src="sketch.js"></script>
-  </body>
+  <!-- p5.js (1.x — the sketch uses preload + sync loadFont) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  <!-- mp4-muxer (desktop MP4 recording) -->
+  <script src="https://cdn.jsdelivr.net/npm/mp4-muxer"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- the p5 canvas is parented here -->
+    <div id="canvas-holder"></div>
+
+    <section id="controls">
+      <!-- accordion: all detailed controls, collapsed by default -->
+      <button id="accordion-toggle" class="accordion-header" aria-expanded="false" aria-controls="accordion-body">
+        <span>Controls</span>
+        <span id="accordion-icon" class="accordion-icon">Open +</span>
+      </button>
+
+      <div id="accordion-body" class="accordion-body" hidden>
+        <div class="field">
+          <label class="field-label" for="text-input">Text</label>
+          <input id="text-input" type="text" value="rundviskom" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <span class="field-label">Draw mode</span>
+          <button id="mode-button" class="ctl-btn">Mode: LETTERS</button>
+          <button id="eraser-button" class="ctl-btn">Eraser: OFF</button>
+        </div>
+
+        <div class="field" id="images-field">
+          <label class="field-label" for="img-file-input">Images</label>
+          <input id="img-file-input" type="file" accept="image/*" multiple />
+        </div>
+
+        <div class="field">
+          <span class="field-label">Auto-layout</span>
+          <button id="auto-button" class="ctl-btn">Auto-layout: OFF</button>
+          <button id="regen-button" class="ctl-btn">&#8635;&nbsp; New random curve</button>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="bg-color-select">Background color</label>
+          <select id="bg-color-select"></select>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Background image / video</span>
+          <button id="bg-button" class="ctl-btn">BG: COLOR</button>
+          <input id="bg-file-input" type="file" accept="image/*,video/*" />
+        </div>
+
+        <div class="field">
+          <span class="field-label">Overlay texture</span>
+          <button id="overlay-button" class="ctl-btn">Overlay: ON</button>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="size-select">Canvas size</label>
+          <select id="size-select"></select>
+        </div>
+      </div>
+
+      <!-- always-visible actions -->
+      <div id="actions">
+        <button id="export-button" class="action-btn">Export Image</button>
+        <button id="record-button" class="action-btn">Record Video</button>
+        <button id="clear-button" class="action-btn action-wide">Clear Canvas</button>
+      </div>
+
+      <button id="save-video-button" class="action-btn action-wide save-btn" hidden>Save Video</button>
+      <p id="rec-status" class="rec-status" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <!-- the sketch wires events to the elements above -->
+  <script src="sketch.js"></script>
+</body>
 </html>
