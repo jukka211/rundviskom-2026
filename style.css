@@ -1,5 +1,5 @@
 :root {
-  --bg-page: #dcdcdc;
+  --bg-page: #000000;
   --panel: #ffffff;
   --ink: #1a1a1a;
   --muted: #6a6a6a;
@@ -40,6 +40,29 @@ html, body {
   flex-direction: column;
   gap: 14px;
   min-height: 100vh;
+}
+
+#screen-info,
+#screen-info-right {
+  position: fixed;
+  z-index: 20;
+  color: #ffffff;
+  font-family: "LinzSans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.75rem;
+  line-height: 100%;
+  pointer-events: none;
+}
+
+#screen-info {
+  top: 12px;
+  left: 12px;
+}
+
+#screen-info-right {
+  bottom: 12px;
+  left: 12px;
+  max-width: min(420px, calc(100vw - 24px));
+  text-align: left;
 }
 
 /* ---- canvas ---- */

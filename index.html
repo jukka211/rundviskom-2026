@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>rundviskom</title>
+  <title>Rundviskom 2026</title>
 
   <!-- p5.js (1.x — the sketch uses preload + sync loadFont) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
@@ -13,6 +13,17 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div id="screen-info" aria-label="Event information">
+    Werkschau der Abteilung Visuelle Kommunikation<br />
+    Rundviskom<br />
+    18-20 Juni 2026<br />
+    Hauptplatz 8<br />
+    4. OG / 3. OG / 5. OG<br />
+    
+  </div>
+
+
+
   <div id="app">
     <!-- the p5 canvas is parented here -->
     <div id="canvas-holder"></div>
@@ -39,12 +50,6 @@
         <div class="field" id="images-field">
           <label class="field-label" for="img-file-input">Images</label>
           <input id="img-file-input" type="file" accept="image/*" multiple />
-        </div>
-
-        <div class="field">
-          <span class="field-label">Auto-layout</span>
-          <button id="auto-button" class="ctl-btn">Auto-layout: OFF</button>
-          <button id="regen-button" class="ctl-btn">&#8635;&nbsp; New random curve</button>
         </div>
 
         <div class="field">
