@@ -9,9 +9,17 @@
   --accent: #0db254;     /* save */
   --danger: #ff4b18;     /* recording */
   --eraser: #ffe0e0;
-  --radius: 10px;
+  --radius: 0px;
   --app-max: 480px;
   --app-pad: 12px;
+}
+
+@font-face {
+  font-family: "LinzSans";
+  src: url("LinzSans-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
 }
 
 * { box-sizing: border-box; }
@@ -44,8 +52,7 @@ html, body {
 #canvas-holder canvas {
   display: block;
   max-width: 100%;
-  border-radius: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  border-radius: 0px;
   touch-action: none;          /* draw on the canvas; scroll on the controls */
   user-select: none;
   -webkit-user-select: none;
@@ -56,11 +63,18 @@ html, body {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.10);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+
+}
+
+#controls,
+#controls * {
+  color: #000000;
+  font-family: "LinzSans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.9rem;
 }
 
 /* accordion header */
@@ -74,7 +88,6 @@ html, body {
   border: none;
   font: inherit;
   font-weight: 700;
-  letter-spacing: 0.02em;
   color: var(--ink);
   cursor: pointer;
 }
@@ -116,7 +129,7 @@ select {
   width: 100%;
   padding: 9px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0px;
   background: #fff;
   color: var(--ink);
   font-size: 16px;   /* >=16px stops iOS zooming on focus */
@@ -133,12 +146,13 @@ input[type="file"] {
   width: 100%;
   padding: 9px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0px;
   background: var(--ctl);
   color: var(--ink);
   font: inherit;
   font-size: 14px;
   cursor: pointer;
+  color: white;
 }
 .ctl-btn:hover { background: var(--ctl-hover); }
 .ctl-btn.on { background: var(--eraser); border-color: rgba(0, 0, 0, 0.18); }
@@ -154,7 +168,7 @@ input[type="file"] {
   width: 100%;
   padding: 12px 10px;
   border: 1px solid var(--ink);
-  border-radius: 9px;
+  border-radius: 0px;
   background: var(--ink);
   color: #fff;
   font: inherit;
@@ -162,6 +176,18 @@ input[type="file"] {
   font-size: 15px;
   cursor: pointer;
 }
+
+#export-button,
+#record-button {
+  color: #ffffff;
+}
+
+#clear-button {
+  background: #ffffff;
+  border-color: #000000;
+  color: #000000;
+}
+
 .action-btn:hover { opacity: 0.9; }
 .action-btn:active { transform: translateY(1px); }
 
@@ -178,6 +204,7 @@ input[type="file"] {
   margin-top: 2px;
   background: var(--accent);
   border-color: var(--accent);
+  color: white;
 }
 .save-btn[hidden] { display: none; }
 

@@ -32,39 +32,6 @@ function previewPixelDensity() {
   return Math.min(3, Math.max(2, window.devicePixelRatio || 1));
 }
 
-// saved "rundviskom" layouts (letter order: r u n d v i s k o m), in width-units
-const LAYOUTS = [
-  {
-    r: 0.186,
-    pts: [
-      [0.3701, 0.2287], [0.5668, 0.4284], [0.5035, 0.6603],
-      [0.7616, 0.6827], [0.7961, 0.9482], [0.5348, 0.9925],
-      [0.2959, 1.1115], [0.2409, 1.347], [0.3757, 1.5794],
-      [0.6372, 1.5707],
-    ],
-  },
-  {
-    r: 0.178,
-    pts: [
-      [0.1461, 0.3506], [0.3439, 0.2178], [0.5515, 0.3687],
-      [0.7421, 0.551], [0.6696, 0.8029], [0.4551, 0.9361],
-      [0.2774, 1.145], [0.4333, 1.3345], [0.6706, 1.2135],
-      [0.8482, 1.3884],
-    ],
-  },
-  {
-    r: 0.1748,
-    pts: [
-      [0.1905, 0.628], [0.2855, 0.4043], [0.4995, 0.2385],
-      [0.7228, 0.3759], [0.8052, 0.6235], [0.788, 0.8569],
-      [0.6105, 1.0503], [0.3658, 1.1613], [0.2304, 1.3817],
-      [0.3399, 1.6005],
-    ],
-  },
-];
-
-const AUTO_SPACING = 1.22;
-
 let currentSize = "story";
 let canvasW = SIZES[currentSize].w;
 let canvasH = SIZES[currentSize].h;
@@ -74,8 +41,6 @@ let phraseCount = 0;
 let currentCol = PALETTE[0];
 let textJustChanged = false;
 let circles = [];
-let autoCircles = [];
-let autoCol = PALETTE[0];
 let lastX = null;
 let lastY = null;
 
@@ -85,9 +50,6 @@ const DIST_RATIO = 1.5;
 const circleR = 200;
 let drawMode = "letters";
 let eraser = false;
-
-let autoLayout = false;
-let currentLayoutIndex = -1;
 
 let loadedImages = [];
 let imgIndex = 0;
@@ -110,9 +72,10 @@ let previewW = 1;
 let previewH = 1;
 
 // UI elements (resolved from the DOM in wireUI)
+let controlsPanel;
 let accordionBody, accordionOpen = false;
 let textInput, modeButton, eraserButton;
-let imgFileInput, imagesField, autoButton, regenButton;
+let imgFileInput, imagesField;
 let bgColorSelect, bgButton, bgFileInput, overlayButton, sizeSelect;
 let exportButton, recordButton, saveVideoButton, recStatus, clearButton;
 
@@ -142,7 +105,7 @@ function preload() {
 
   // overlay texture; if it fails to load it simply isn't drawn
   overlayImage = loadImage(
-    "https://jukka211.github.io/rundviskom-2026/background-image.png",
+    "/background-image.png",
     () => {},
     () => {
       overlayImage = null;
@@ -202,12 +165,20 @@ function relayout() {
   if (!cnv) return;
   recalcDisplayScale();
   resizeCanvas(previewW, previewH);
+  syncControlsWidth();
   applyCtxDefaults();
-  if (autoLayout) applyLayout();
+}
+
+function syncControlsWidth() {
+  if (!controlsPanel) return;
+  controlsPanel.style.width = previewW + "px";
+  controlsPanel.style.maxWidth = "100%";
+  controlsPanel.style.alignSelf = "center";
 }
 
 // ---- wire DOM controls to behaviour ----
 function wireUI() {
+  controlsPanel = document.getElementById("controls");
   accordionBody = document.getElementById("accordion-body");
   const accToggle = document.getElementById("accordion-toggle");
   accToggle.addEventListener("click", toggleAccordion);
@@ -225,12 +196,6 @@ function wireUI() {
   imagesField = document.getElementById("images-field");
   imgFileInput = document.getElementById("img-file-input");
   imgFileInput.addEventListener("change", loadSelectedImages);
-
-  autoButton = document.getElementById("auto-button");
-  autoButton.addEventListener("click", toggleAutoLayout);
-
-  regenButton = document.getElementById("regen-button");
-  regenButton.addEventListener("click", generateAutoLayout);
 
   bgColorSelect = document.getElementById("bg-color-select");
   BG_COLORS.forEach((c) => {
@@ -301,8 +266,6 @@ function updateVisibility() {
   imagesField.hidden = drawMode !== "images";
   // media picker only for image/video backgrounds
   bgFileInput.hidden = !(bgMode === "image" || bgMode === "video");
-  // "new random curve" only while auto-layout is on
-  regenButton.hidden = !autoLayout;
 }
 
 // ---- file handlers ----
@@ -414,17 +377,6 @@ function toggleEraser() {
   eraserButton.textContent = eraser ? "Eraser: ON" : "Eraser: OFF";
   eraserButton.classList.toggle("on", eraser);
   if (cnv) cnv.style("cursor", eraser ? "crosshair" : "default");
-}
-
-function toggleAutoLayout() {
-  autoLayout = !autoLayout;
-  autoButton.textContent = autoLayout ? "Auto-layout: ON" : "Auto-layout: OFF";
-  autoButton.classList.toggle("on", autoLayout);
-
-  if (autoLayout) generateAutoLayout();
-  else autoCircles = [];
-
-  updateVisibility();
 }
 
 function toggleBg() {
@@ -926,8 +878,7 @@ function renderScene(ctx, CW, CH) {
     pop_();
   }
 
-  // auto-layout shape first (underneath), then manually drawn circles on top
-  for (const c of autoCircles.concat(circles)) {
+  for (const c of circles) {
     if (c.img) {
       push_();
       dc.save();
@@ -962,70 +913,6 @@ function updateText() {
   phraseText = (raw.length ? raw : "rundviskom") + "  ";
   letterIndex = 0;
   textJustChanged = true;
-
-  if (autoLayout) {
-    pickAutoColor();
-    applyLayout();
-  }
-}
-
-function pickAutoColor() {
-  let next;
-  do {
-    next = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-  } while (next === autoCol && PALETTE.length > 1);
-  autoCol = next;
-}
-
-// ---- auto-layout: place phraseText using one of the saved layouts ----
-function generateAutoLayout() {
-  if (LAYOUTS.length === 0) return;
-
-  let idx = Math.floor(Math.random() * LAYOUTS.length);
-  if (LAYOUTS.length > 1) {
-    while (idx === currentLayoutIndex) {
-      idx = Math.floor(Math.random() * LAYOUTS.length);
-    }
-  }
-
-  currentLayoutIndex = idx;
-  pickAutoColor();
-  applyLayout();
-}
-
-function applyLayout() {
-  autoCircles = [];
-  if (currentLayoutIndex < 0 || currentLayoutIndex >= LAYOUTS.length) return;
-
-  const chars = phraseText.split("");
-  if (chars.length === 0) return;
-
-  const layout = LAYOUTS[currentLayoutIndex];
-  const pts = layout.pts;
-  const scale = (circleR / layout.r) * AUTO_SPACING;
-
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const [px, py] of pts) {
-    minX = Math.min(minX, px);
-    maxX = Math.max(maxX, px);
-    minY = Math.min(minY, py);
-    maxY = Math.max(maxY, py);
-  }
-  const cx = (minX + maxX) / 2;
-  const cy = (minY + maxY) / 2;
-
-  const count = Math.min(chars.length, pts.length);
-  for (let i = 0; i < count; i++) {
-    const ch = chars[i];
-    if (ch === " ") continue;
-    autoCircles.push({
-      x: canvasW / 2 + (pts[i][0] - cx) * scale,
-      y: canvasH / 2 + (pts[i][1] - cy) * scale,
-      r: circleR,
-      ch,
-      col: autoCol,
-    });
-  }
 }
 
 function addCircle(x, y) {
@@ -1058,7 +945,6 @@ function addCircle(x, y) {
 
 function eraseAt(x, y) {
   circles = circles.filter((c) => dist(x, y, c.x, c.y) > c.r);
-  autoCircles = autoCircles.filter((c) => dist(x, y, c.x, c.y) > c.r);
 }
 
 function inCanvas() {
@@ -1119,21 +1005,11 @@ function touchEnded() { pointerUp(); return true; }
 
 function clearCanvas() {
   circles = [];
-  autoCircles = [];
   letterIndex = 0;
   imgIndex = 0;
   phraseCount = 0;
   textJustChanged = false;
   pickPhraseColor();
-
-  if (autoLayout) {
-    autoLayout = false;
-    if (autoButton) {
-      autoButton.textContent = "Auto-layout: OFF";
-      autoButton.classList.remove("on");
-    }
-    updateVisibility();
-  }
 }
 
 function keyPressed() {
