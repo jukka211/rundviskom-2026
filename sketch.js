@@ -142,7 +142,7 @@ function preload() {
 
   // overlay texture; if it fails to load it simply isn't drawn
   overlayImage = loadImage(
-    "/background-image.png",
+    "https://jukka211.github.io/rundviskom-2026/background-image.png",
     () => {},
     () => {
       overlayImage = null;
