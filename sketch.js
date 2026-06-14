@@ -105,7 +105,7 @@ function preload() {
 
   // overlay texture; if it fails to load it simply isn't drawn
   overlayImage = loadImage(
-    "https://jukka211.github.io/rundviskom-2026//background-image.png",
+    "https://jukka211.github.io/rundviskom-2026/background-image.png",
     () => {},
     () => {
       overlayImage = null;
@@ -171,6 +171,12 @@ function relayout() {
 
 function syncControlsWidth() {
   if (!controlsPanel) return;
+  if (isMobile()) {
+    controlsPanel.style.width = "calc(100vw - 20px)";
+    controlsPanel.style.maxWidth = "calc(100vw - 20px)";
+    controlsPanel.style.alignSelf = "center";
+    return;
+  }
   controlsPanel.style.width = previewW + "px";
   controlsPanel.style.maxWidth = "100%";
   controlsPanel.style.alignSelf = "center";
