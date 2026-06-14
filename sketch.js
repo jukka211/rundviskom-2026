@@ -142,7 +142,7 @@ function preload() {
 
   // overlay texture; if it fails to load it simply isn't drawn
   overlayImage = loadImage(
-    "https://jukka211.github.io/rundviskom-2026/background-image.png",
+    "/background-image.png",
     () => {},
     () => {
       overlayImage = null;
@@ -357,21 +357,41 @@ function loadBgVideo(file) {
   clearBgVideo();
   const url = URL.createObjectURL(file);
 
-  bgVideo = createVideo(url, () => {
-    bgVideo.hide();
-    bgVideo.volume(0);
-    bgVideo.elt.muted = true;
-    bgVideo.elt.playsInline = true;
-    bgVideo.elt.setAttribute("playsinline", "");
-    bgVideo.elt.setAttribute("webkit-playsinline", "");
-    bgVideo.loop();
-    bgVideo.play().catch(() => {});
+  bgVideo = createVideo(url);
+  const el = bgVideo.elt;
 
+  bgVideo.volume(0);
+  el.muted = true;
+  el.defaultMuted = true;
+  el.loop = true;
+  el.playsInline = true;
+  el.setAttribute("playsinline", "");
+  el.setAttribute("webkit-playsinline", "");
+
+  // Keep the element out of view but NOT display:none - mobile WebKit stops
+  // decoding frames for display:none <video>, which would leave the canvas
+  // showing a frozen/blank background.
+  el.style.position = "fixed";
+  el.style.width = "1px";
+  el.style.height = "1px";
+  el.style.opacity = "0";
+  el.style.pointerEvents = "none";
+
+  const activate = () => {
     bgImage = null;
     bgMode = "video";
     bgButton.textContent = "BG: VIDEO";
     updateVisibility();
-  });
+    bgVideo.play().catch(() => {});
+  };
+
+  // p5's createVideo callback waits for "canplaythrough", which doesn't
+  // reliably fire for blob: URLs on mobile - switch as soon as metadata
+  // (and videoWidth/videoHeight) is available instead.
+  if (el.readyState >= 1) activate();
+  else el.addEventListener("loadedmetadata", activate, { once: true });
+
+  el.addEventListener("loadeddata", () => URL.revokeObjectURL(url), { once: true });
 }
 
 function clearBgVideo() {
