@@ -46,8 +46,8 @@ let lastY = null;
 
 let linzFont;
 
-const DIST_RATIO = 1.5;
-const circleR = 200;
+const DIST_RATIO = 1.3;
+const circleR = 140;
 let drawMode = "letters";
 let eraser = false;
 
@@ -60,8 +60,9 @@ let bgColor = "#FFFFFF";
 let bgImage = null;
 let bgVideo = null;
 
-// fixed overlay texture (background-image.png), multiplied over the background
-let overlayImage = null;
+// fixed overlay textures (background-image.png / background-image-post.png),
+// multiplied over the background; picked per-size in draw()
+let overlayImages = { story: null, post: null };
 let overlayEnabled = true;
 
 // canvas + preview scaling
@@ -103,12 +104,19 @@ const REC_BITRATE = 40_000_000; // 40 Mbps
 function preload() {
   linzFont = loadFont("LinzSans-Medium.ttf");
 
-  // overlay texture; if it fails to load it simply isn't drawn
-  overlayImage = loadImage(
+  // overlay textures; if either fails to load it simply isn't drawn
+  overlayImages.story = loadImage(
     "https://jukka211.github.io/rundviskom-2026/background-image.png",
     () => {},
     () => {
-      overlayImage = null;
+      overlayImages.story = null;
+    }
+  );
+  overlayImages.post = loadImage(
+    "https://jukka211.github.io/rundviskom-2026/background-image-post.png",
+    () => {},
+    () => {
+      overlayImages.post = null;
     }
   );
 }
@@ -876,6 +884,7 @@ function renderScene(ctx, CW, CH) {
   }
 
   // fixed overlay texture, multiplied on top of the background layer
+  const overlayImage = overlayImages[currentSize];
   if (overlayEnabled && overlayImage && overlayImage.width) {
     const scaleOv = Math.max(CW / overlayImage.width, CH / overlayImage.height);
     push_();
