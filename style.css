@@ -180,6 +180,47 @@ input[type="file"] {
 .ctl-btn:hover { background: var(--ctl-hover); }
 .ctl-btn.on { background: var(--eraser); border-color: rgba(0, 0, 0, 0.18); }
 
+/* path color: round swatches echo the circles they colour */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch,
+.swatch-custom input[type="color"] {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.swatch[aria-checked="true"],
+.swatch-custom input[type="color"].selected {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.swatch-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  cursor: pointer;
+}
+
+.swatch-custom input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+}
+.swatch-custom input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.swatch-custom input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+.swatch-custom input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
+
 /* ---- primary actions ---- */
 #actions {
   display: grid;

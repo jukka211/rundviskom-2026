@@ -42,6 +42,23 @@
         </div>
 
         <div class="field">
+          <label class="field-label" for="path-select">Path</label>
+          <select id="path-select"></select>
+          <button id="path-replay-button" class="ctl-btn" hidden>Replay animation</button>
+        </div>
+
+        <div class="field" id="path-color-field" hidden>
+          <span class="field-label" id="path-color-label">Path color</span>
+          <!-- palette swatches are inserted before the custom picker by the sketch -->
+          <div id="path-swatches" class="swatches" role="radiogroup" aria-labelledby="path-color-label">
+            <label class="swatch-custom">
+              <input id="path-color-input" type="color" value="#0db254" />
+              <span>Custom</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
           <span class="field-label">Draw mode</span>
           <button id="mode-button" class="ctl-btn">Mode: LETTERS</button>
           <button id="eraser-button" class="ctl-btn">Eraser: OFF</button>

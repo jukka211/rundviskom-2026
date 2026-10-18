@@ -65,6 +65,14 @@ let bgVideo = null;
 let overlayImages = { story: null, post: null };
 let overlayEnabled = true;
 
+// abstract paths: the text laid out as a chain of circles along a preset
+// curve, animated in from the first circle to the last
+let pathIndex = -1; // -1 = off, else an index into PATH_PRESETS
+let pathColor = "#0DB254";
+let pathStartTime = 0;
+let pathCache = null; // { key, circles } for the current preset/size/text
+let pathErased = new Set(); // indices of path circles removed by the eraser
+
 // canvas + preview scaling
 let cnv;
 let canvasHolder;
@@ -78,6 +86,7 @@ let accordionBody, accordionOpen = false;
 let textInput, modeButton, eraserButton;
 let imgFileInput, imagesField;
 let bgColorSelect, bgButton, bgFileInput, overlayButton, sizeSelect;
+let pathSelect, pathReplayButton, pathColorField, pathSwatches, pathColorInput;
 let exportButton, recordButton, saveVideoButton, recStatus, clearButton;
 
 // last finished recording, held so a fresh tap can save it on mobile
@@ -201,6 +210,38 @@ function wireUI() {
   textInput.value = "rundviskom";
   textInput.addEventListener("input", updateText);
 
+  pathSelect = document.getElementById("path-select");
+  [{ name: "Off" }, ...PATH_PRESETS].forEach((p, i) => {
+    const o = document.createElement("option");
+    o.value = String(i - 1);
+    o.textContent = p.name;
+    pathSelect.appendChild(o);
+  });
+  pathSelect.value = String(pathIndex);
+  pathSelect.addEventListener("change", () => setPath(parseInt(pathSelect.value, 10)));
+
+  pathReplayButton = document.getElementById("path-replay-button");
+  pathReplayButton.addEventListener("click", replayPath);
+
+  pathColorField = document.getElementById("path-color-field");
+  pathSwatches = document.getElementById("path-swatches");
+  pathColorInput = document.getElementById("path-color-input");
+  const customColor = pathColorInput.closest("label");
+  PALETTE.forEach((c) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "swatch";
+    b.dataset.color = c;
+    b.style.background = c;
+    b.title = c;
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-label", c);
+    b.addEventListener("click", () => setPathColor(c));
+    pathSwatches.insertBefore(b, customColor);
+  });
+  pathColorInput.addEventListener("input", () => setPathColor(pathColorInput.value));
+  setPathColor(pathColor);
+
   modeButton = document.getElementById("mode-button");
   modeButton.addEventListener("click", toggleMode);
 
@@ -280,6 +321,9 @@ function updateVisibility() {
   imagesField.hidden = drawMode !== "images";
   // media picker only for image/video backgrounds
   bgFileInput.hidden = !(bgMode === "image" || bgMode === "video");
+  // replay + colour only while a path is shown
+  pathReplayButton.hidden = pathIndex < 0;
+  pathColorField.hidden = pathIndex < 0;
 }
 
 // ---- file handlers ----
@@ -570,6 +614,8 @@ async function startRecording() {
   recLastCapture = 0;
   recFrameCount = 0;
   isRecording = true;
+  // the video opens with the path drawing itself in
+  if (pathIndex >= 0) replayPath();
   recordButton.textContent = "Stop Recording";
   recordButton.classList.add("recording");
   recSetStatus("Recording " + out.w + "x" + out.h + " [" + recMode + "]");
@@ -893,6 +939,26 @@ function renderScene(ctx, CW, CH) {
     pop_();
   }
 
+  // abstract path, appearing circle by circle at full size; all discs go down
+  // before the letters so a later circle never covers an earlier letter
+  const pathCircles = currentPathCircles();
+  if (pathCircles) {
+    const now = performance.now();
+    const shown = pathCircles.filter(
+      (c, i) => c.ch !== " " && !pathErased.has(i) && pathCircleShown(i, now)
+    );
+
+    noStroke_();
+    fill_(pathColor);
+    for (const c of shown) circle_(c.x, c.y, c.r * 2);
+
+    fill_(0);
+    for (const c of shown) {
+      textSize_(c.r * 1.5);
+      text_(c.ch, c.x, c.y + 1);
+    }
+  }
+
   for (const c of circles) {
     if (c.img) {
       push_();
@@ -917,6 +983,196 @@ function renderScene(ctx, CW, CH) {
       text_(c.ch, c.x, c.y + 1);
     }
   }
+}
+
+// ---- abstract paths ----
+// Curves are defined in "poster space": the 948px-wide reference posters,
+// where the circle chain fills roughly x 0..948, y 150..1190. That frame is
+// mapped onto PATH_BOX (fractions of the canvas) for the current size, then
+// the text is spaced evenly along the curve by arc length.
+const PATH_FRAME = { x: 0, y: 150, w: 948, h: 1040 };
+const PATH_BOX = {
+  story: { x0: 0.02, y0: 0.185, x1: 0.98, y1: 0.775 },
+  post: { x0: 0.04, y0: 0.13, x1: 0.96, y1: 0.835 },
+};
+
+const PATH_R_RATIO = 0.53; // circle radius / centre spacing, as on the posters
+const PATH_R_MIN = 0.04; // radius limits, as fractions of the canvas width
+const PATH_R_MAX = 0.13;
+const PATH_STEP_MS = 70; // delay between consecutive circles
+
+const PATH_PRESETS = [
+  {
+    name: "Curve 1 – Snake",
+    // circle centres measured from the green poster
+    knots: [
+      [166, 292], [197, 509], [404, 429], [627, 392], [776, 563],
+      [584, 674], [434, 794], [228, 864], [352, 1056], [589, 1056],
+    ],
+  },
+  {
+    name: "Curve 2 – Hook",
+    // circle centres measured from the yellow poster
+    knots: [
+      [169, 426], [310, 276], [516, 261], [667, 413], [614, 615],
+      [430, 738], [282, 896], [421, 1063], [614, 953], [778, 1065],
+    ],
+  },
+  {
+    name: "Curve 3 – Scribble",
+    // freehand stroke: a random walk with the posters' step length and
+    // irregular turns, picked for reading like a quick pen gesture
+    knots: [
+      [420, 301], [475, 519], [292, 659], [151, 820], [181, 1046],
+      [383, 948], [535, 808], [707, 663], [785, 860], [710, 1054],
+    ],
+  },
+  {
+    name: "Curve 4 – Wave",
+    // sine meander, three half-waves from top left to bottom right
+    fn: (t) => [474 + 285 * Math.sin(Math.PI * (3 * t - 0.5)), 275 + 790 * t],
+  },
+  {
+    name: "Curve 5 – Zigzag",
+    // freehand stroke like Curve 3: up to the top right, then one long
+    // diagonal back down to the bottom left
+    knots: [
+      [166, 468], [277, 648], [433, 478], [572, 322], [776, 292],
+      [749, 508], [748, 718], [537, 789], [347, 919], [177, 1052],
+    ],
+  },
+];
+
+// dense polyline of a preset in poster space (cached on the preset)
+function presetPolyline(preset) {
+  if (!preset.poly) {
+    preset.poly = preset.knots ? splinePolyline(preset.knots, 32) : sampleCurve(preset.fn, 480);
+  }
+  return preset.poly;
+}
+
+function sampleCurve(fn, steps) {
+  const pts = [];
+  for (let i = 0; i <= steps; i++) pts.push(fn(i / steps));
+  return pts;
+}
+
+// centripetal Catmull-Rom through every knot (no cusps or self-loops)
+function splinePolyline(knots, steps) {
+  const n = knots.length;
+  const mirror = (a, b) => [2 * b[0] - a[0], 2 * b[1] - a[1]];
+  const P = [mirror(knots[1], knots[0]), ...knots, mirror(knots[n - 2], knots[n - 1])];
+  const lerp2 = (a, b, ta, tb, t) => {
+    const k = (t - ta) / (tb - ta);
+    return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+  };
+  const knotT = (a, b) => Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])) || 1e-6;
+
+  const out = [];
+  for (let i = 1; i < P.length - 2; i++) {
+    const [p0, p1, p2, p3] = [P[i - 1], P[i], P[i + 1], P[i + 2]];
+    const t0 = 0;
+    const t1 = t0 + knotT(p0, p1);
+    const t2 = t1 + knotT(p1, p2);
+    const t3 = t2 + knotT(p2, p3);
+    for (let s = 0; s < steps; s++) {
+      const t = t1 + ((t2 - t1) * s) / steps;
+      const a1 = lerp2(p0, p1, t0, t1, t);
+      const a2 = lerp2(p1, p2, t1, t2, t);
+      const a3 = lerp2(p2, p3, t2, t3, t);
+      const b1 = lerp2(a1, a2, t0, t2, t);
+      const b2 = lerp2(a2, a3, t1, t3, t);
+      out.push(lerp2(b1, b2, t1, t2, t));
+    }
+  }
+  out.push(knots[n - 1]);
+  return out;
+}
+
+// Circles for every character of `text` (spaces stay as empty slots), spaced
+// evenly along the preset's curve in CW x CH canvas coordinates. The radius
+// follows the spacing so the chain overlaps like on the posters; if it hits
+// PATH_R_MAX the chain is shortened and centred on the curve instead.
+function layoutPath(preset, text, CW, CH, box) {
+  const chars = Array.from(text);
+  const n = chars.length;
+  if (n === 0) return [];
+
+  const sx = ((box.x1 - box.x0) * CW) / PATH_FRAME.w;
+  const sy = ((box.y1 - box.y0) * CH) / PATH_FRAME.h;
+  const pts = presetPolyline(preset).map(([x, y]) => [
+    box.x0 * CW + (x - PATH_FRAME.x) * sx,
+    box.y0 * CH + (y - PATH_FRAME.y) * sy,
+  ]);
+
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  }
+  const total = cum[cum.length - 1];
+
+  let spacing = n > 1 ? total / (n - 1) : total;
+  const r = Math.min(Math.max(spacing * PATH_R_RATIO, PATH_R_MIN * CW), PATH_R_MAX * CW);
+  if (spacing * PATH_R_RATIO > r) spacing = r / PATH_R_RATIO;
+  const start = (total - spacing * (n - 1)) / 2;
+
+  const circles = [];
+  let seg = 1;
+  for (let i = 0; i < n; i++) {
+    const s = Math.min(total, start + spacing * i);
+    while (seg < pts.length - 1 && cum[seg] < s) seg++;
+    const k = (s - cum[seg - 1]) / (cum[seg] - cum[seg - 1] || 1);
+    circles.push({
+      x: pts[seg - 1][0] + (pts[seg][0] - pts[seg - 1][0]) * k,
+      y: pts[seg - 1][1] + (pts[seg][1] - pts[seg - 1][1]) * k,
+      r,
+      ch: chars[i],
+    });
+  }
+  return circles;
+}
+
+// laid-out circles for the active preset, re-laid when preset/size/text change
+function currentPathCircles() {
+  if (pathIndex < 0) return null;
+  const text = phraseText.trim() || "rundviskom";
+  const key = pathIndex + "|" + currentSize + "|" + text;
+  if (!pathCache || pathCache.key !== key) {
+    pathCache = {
+      key,
+      circles: layoutPath(PATH_PRESETS[pathIndex], text, canvasW, canvasH, PATH_BOX[currentSize]),
+    };
+    pathErased.clear();
+  }
+  return pathCache.circles;
+}
+
+function setPath(index) {
+  pathIndex = index;
+  if (pathSelect) pathSelect.value = String(index);
+  replayPath();
+  updateVisibility();
+}
+
+// redraw the active path from its first circle (erased circles stay erased)
+function replayPath() {
+  pathStartTime = performance.now();
+}
+
+function setPathColor(col) {
+  pathColor = col;
+  if (!pathSwatches) return;
+  const same = (c) => c.toLowerCase() === col.toLowerCase();
+  for (const b of pathSwatches.querySelectorAll(".swatch")) {
+    b.setAttribute("aria-checked", same(b.dataset.color) ? "true" : "false");
+  }
+  pathColorInput.value = col.toLowerCase();
+  pathColorInput.classList.toggle("selected", !PALETTE.some(same));
+}
+
+// whether path circle i has appeared yet at time `now`
+function pathCircleShown(i, now) {
+  return now - pathStartTime >= i * PATH_STEP_MS;
 }
 
 function pickPhraseColor() {
@@ -960,6 +1216,13 @@ function addCircle(x, y) {
 
 function eraseAt(x, y) {
   circles = circles.filter((c) => dist(x, y, c.x, c.y) > c.r);
+
+  const pathCircles = currentPathCircles();
+  if (pathCircles) {
+    pathCircles.forEach((c, i) => {
+      if (dist(x, y, c.x, c.y) <= c.r) pathErased.add(i);
+    });
+  }
 }
 
 function inCanvas() {
@@ -1025,6 +1288,7 @@ function clearCanvas() {
   phraseCount = 0;
   textJustChanged = false;
   pickPhraseColor();
+  setPath(-1);
 }
 
 function keyPressed() {
